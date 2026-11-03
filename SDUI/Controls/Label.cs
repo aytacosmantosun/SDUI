@@ -51,6 +51,36 @@ public class Label : System.Windows.Forms.Label
         Invalidate();
     }
 
+    /// <summary>
+    ///     The custom <see cref="OnPaint" /> renders text with GDI+ (<see cref="Graphics.DrawString" />), which is a
+    ///     touch wider than the GDI measurement the base <see cref="System.Windows.Forms.Label" /> uses for AutoSize.
+    ///     The result was labels clipping their last glyph everywhere (e.g. "Standby retry dela", "...(0 = never"). We
+    ///     measure with the same GDI+ path here and widen the preferred size so AutoSize text always fits in full.
+    /// </summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var preferred = base.GetPreferredSize(proposedSize);
+
+        if (!AutoSize || string.IsNullOrEmpty(Text))
+            return preferred;
+
+        try
+        {
+            using var graphics = Graphics.FromHwnd(IntPtr.Zero);
+            var measured = graphics.MeasureString(Text, Font);
+            var width = (int)Math.Ceiling(measured.Width) + Padding.Horizontal + 2;
+            if (width > preferred.Width)
+                preferred.Width = width;
+        }
+        catch
+        {
+            // Fallback: a small fixed buffer still covers the common one-glyph clip.
+            preferred.Width += 4;
+        }
+
+        return preferred;
+    }
+
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
