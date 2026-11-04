@@ -88,11 +88,19 @@ public class Label : System.Windows.Forms.Label
         // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks the label below its (unscaled) text, which
         // then clips or wraps and overlaps its neighbours. Restore whichever dimension is too small so the label
         // always shows its full text (height matters for the multi-line help labels that carry explicit newlines).
-        if (AutoSize)
+        // Never let a measurement hiccup abort the parent's scale pass (which would leave a view unrendered).
+        try
         {
-            var preferred = GetPreferredSize(Size.Empty);
-            if (preferred.Width > Width || preferred.Height > Height)
-                Size = new Size(Math.Max(Width, preferred.Width), Math.Max(Height, preferred.Height));
+            if (AutoSize)
+            {
+                var preferred = GetPreferredSize(Size.Empty);
+                if (preferred.Width > Width || preferred.Height > Height)
+                    Size = new Size(Math.Max(Width, preferred.Width), Math.Max(Height, preferred.Height));
+            }
+        }
+        catch
+        {
+            // ignored
         }
     }
 

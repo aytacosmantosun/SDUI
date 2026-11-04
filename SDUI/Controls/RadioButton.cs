@@ -81,7 +81,20 @@ public class Radio : RadioButton
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        var width = boxOffset + 20 + (int)CreateGraphics().MeasureString(Text, Font).Width;
+        // Measure off the screen DC (not CreateGraphics, which needs this control's handle and throws during early
+        // DPI scaling), with a GDI fallback, so measuring can never fail or leak a Graphics while laying out.
+        int textWidth;
+        try
+        {
+            using var graphics = Graphics.FromHwnd(IntPtr.Zero);
+            textWidth = (int)Math.Ceiling(graphics.MeasureString(Text ?? string.Empty, Font).Width);
+        }
+        catch
+        {
+            textWidth = TextRenderer.MeasureText(Text, Font).Width;
+        }
+
+        var width = boxOffset + 20 + textWidth;
         return Ripple ? new Size(width, 30) : new Size(width, 20);
     }
 
@@ -92,11 +105,19 @@ public class Radio : RadioButton
         // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks this control's width but not its text,
         // which then wraps onto a second line and overlaps the control below it in dense panels. Restore the width
         // that fits the text on one line (keeping the already-scaled height) so it stays readable at any DPI.
-        if (AutoSize)
+        // Never let a measurement hiccup abort the parent's scale pass (which would leave a view unrendered).
+        try
         {
-            var preferredWidth = GetPreferredSize(Size.Empty).Width;
-            if (preferredWidth > Width)
-                Size = new Size(preferredWidth, Height);
+            if (AutoSize)
+            {
+                var preferredWidth = GetPreferredSize(Size.Empty).Width;
+                if (preferredWidth > Width)
+                    Size = new Size(preferredWidth, Height);
+            }
+        }
+        catch
+        {
+            // ignored
         }
     }
 

@@ -151,11 +151,19 @@ namespace SDUI.Controls
             // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks this control's width but not its text,
             // which then wraps onto a second line and overlaps the control below it in dense panels. Restore the
             // width that fits the text on one line (keeping the already-scaled height) so it stays readable.
-            if (AutoSize)
+            // Never let a measurement hiccup abort the parent's scale pass (which would leave a view unrendered).
+            try
             {
-                var preferredWidth = GetPreferredSize(Size.Empty).Width;
-                if (preferredWidth > Width)
-                    Size = new Size(preferredWidth, Height);
+                if (AutoSize)
+                {
+                    var preferredWidth = GetPreferredSize(Size.Empty).Width;
+                    if (preferredWidth > Width)
+                        Size = new Size(preferredWidth, Height);
+                }
+            }
+            catch
+            {
+                // ignored
             }
         }
 
