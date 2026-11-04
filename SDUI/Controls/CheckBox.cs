@@ -144,6 +144,21 @@ namespace SDUI.Controls
             return Ripple ? new Size(w, 30) : new Size(w, 20);
         }
 
+        protected override void ScaleControl(SizeF factor, BoundsSpecified specified)
+        {
+            base.ScaleControl(factor, specified);
+
+            // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks this control's width but not its text,
+            // which then wraps onto a second line and overlaps the control below it in dense panels. Restore the
+            // width that fits the text on one line (keeping the already-scaled height) so it stays readable.
+            if (AutoSize)
+            {
+                var preferredWidth = GetPreferredSize(Size.Empty).Width;
+                if (preferredWidth > Width)
+                    Size = new Size(preferredWidth, Height);
+            }
+        }
+
         protected override void OnCreateControl()
         {
             base.OnCreateControl();

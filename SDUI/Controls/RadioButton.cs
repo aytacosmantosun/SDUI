@@ -85,6 +85,21 @@ public class Radio : RadioButton
         return Ripple ? new Size(width, 30) : new Size(width, 20);
     }
 
+    protected override void ScaleControl(SizeF factor, BoundsSpecified specified)
+    {
+        base.ScaleControl(factor, specified);
+
+        // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks this control's width but not its text,
+        // which then wraps onto a second line and overlaps the control below it in dense panels. Restore the width
+        // that fits the text on one line (keeping the already-scaled height) so it stays readable at any DPI.
+        if (AutoSize)
+        {
+            var preferredWidth = GetPreferredSize(Size.Empty).Width;
+            if (preferredWidth > Width)
+                Size = new Size(preferredWidth, Height);
+        }
+    }
+
     protected override void OnCreateControl()
     {
         base.OnCreateControl();
