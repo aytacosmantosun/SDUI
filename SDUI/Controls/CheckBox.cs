@@ -126,7 +126,21 @@ namespace SDUI.Controls
 
         public override Size GetPreferredSize(Size proposedSize)
         {
-            int w = boxOffset + CHECKBOX_SIZE + 2 + TextRenderer.MeasureText(Text, Font).Width;
+            // OnPaint draws the label with GDI+ (DrawString), which is wider than the GDI TextRenderer the preferred
+            // size used, so long checkbox texts clipped their last glyph. Measure with the same GDI+ path (plus a
+            // small buffer) so the text always fits.
+            int textWidth;
+            try
+            {
+                using var graphics = Graphics.FromHwnd(IntPtr.Zero);
+                textWidth = (int)Math.Ceiling(graphics.MeasureString(Text ?? string.Empty, Font).Width) + 2;
+            }
+            catch
+            {
+                textWidth = TextRenderer.MeasureText(Text, Font).Width + 6;
+            }
+
+            int w = boxOffset + CHECKBOX_SIZE + 2 + textWidth;
             return Ripple ? new Size(w, 30) : new Size(w, 20);
         }
 
