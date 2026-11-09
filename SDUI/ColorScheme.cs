@@ -32,7 +32,7 @@ public class ColorScheme
     /// <summary>
     /// Gets theme accent color
     /// </summary>
-    public static Color AccentColor => Color.FromArgb(202, 179, 139);
+    public static Color AccentColor => Color.FromArgb(224, 160, 66);
 
     /// <summary>
     /// Gets or sets the debug borders

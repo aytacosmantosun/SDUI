@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Windows.Forms;
 using SDUI.Animation;
 using SDUI.Helpers;
@@ -1421,7 +1422,19 @@ public class UIWindow : UIWindowBase
                 }
                 else
                 {
-                    page.DrawString(graphics, foreColor, rect);
+                    // One line per header: UpdateTabRects makes room for the text; if the window is too narrow
+                    // for every name, the text ends in an ellipsis instead of wrapping onto a second line.
+                    graphics.TextRenderingHint = TextRenderingHint.SystemDefault;
+                    using var textBrush = new SolidBrush(foreColor);
+                    using var format = new StringFormat()
+                    {
+                        Alignment = StringAlignment.Center,
+                        LineAlignment = StringAlignment.Center,
+                        Trimming = StringTrimming.EllipsisCharacter,
+                        FormatFlags = StringFormatFlags.NoWrap,
+                    };
+
+                    graphics.DrawString(page.Text, page.Font, textBrush, rect, format);
                 }
             }
 
@@ -1688,13 +1701,46 @@ public class UIWindow : UIWindowBase
             tabAreaWidth += _extendBoxRect.Width;
 
         float maxSize = 200f * DPI;
+        var count = _windowPageControl.Count;
+        var available = Math.Max(0f, Width - tabAreaWidth - 30);
 
-        tabAreaWidth = (Width - tabAreaWidth - 30) / _windowPageControl.Count;
-        if (tabAreaWidth > maxSize)
-            tabAreaWidth = maxSize;
+        // Every header gets the width its own text needs (so long names such as "Protection" stay on one line)
+        // and the space left over is shared equally, as the former equal split did. If the names do not all
+        // fit, every header shrinks by the same factor (the text then ends in an ellipsis, see OnPaint).
+        var widths = new float[count];
+        var needed = 0f;
+        using (var measure = Graphics.FromHwnd(IntPtr.Zero))
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var page = _windowPageControl.Controls[i];
+                var width = measure.MeasureString(page.Text ?? string.Empty, page.Font).Width + 2 * TAB_HEADER_PADDING * DPI;
+                if (_drawTabIcons)
+                    width += measure.MeasureString("", Font).Width + TAB_HEADER_PADDING * DPI + 24 * DPI;
 
-        pageRect.Add(new(44, 0, tabAreaWidth, _titleHeightDPI));
-        for (int i = 1; i < _windowPageControl.Count; i++)
-            pageRect.Add(new(pageRect[i - 1].Right, 0, tabAreaWidth, _titleHeightDPI));
+                widths[i] = Math.Min(maxSize, width);
+                needed += widths[i];
+            }
+        }
+
+        if (needed > available)
+        {
+            var factor = needed > 0 ? available / needed : 0;
+            for (int i = 0; i < count; i++)
+                widths[i] *= factor;
+        }
+        else
+        {
+            var extra = (available - needed) / count;
+            for (int i = 0; i < count; i++)
+                widths[i] = Math.Min(maxSize, widths[i] + extra);
+        }
+
+        var x = 44f;
+        for (int i = 0; i < count; i++)
+        {
+            pageRect.Add(new(x, 0, widths[i], _titleHeightDPI));
+            x += widths[i];
+        }
     }
 }
