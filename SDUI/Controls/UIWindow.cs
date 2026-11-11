@@ -846,7 +846,11 @@ public class UIWindow : UIWindowBase
         {
             //int screenIndex = GetMouseInScreen(PointToScreen(e.Location));
             var screen = Screen.FromPoint(MousePosition);
-            if (MousePosition.Y == screen.WorkingArea.Top && MaximizeBox)
+            // Only a window dragged to the top edge maximizes. A real drag ends in the system move loop
+            // (WM_EXITSIZEMOVE clears the flags), so without this check a plain click on a title-bar tab
+            // with the cursor on the screen's top row - where a maximized window's tabs are - toggled
+            // maximize / restore.
+            if (_isDragging && WindowState == FormWindowState.Normal && MousePosition.Y == screen.WorkingArea.Top && MaximizeBox)
             {
                 ShowMaximize(true);
             }
