@@ -55,7 +55,9 @@ public class Label : System.Windows.Forms.Label
     ///     The custom <see cref="OnPaint" /> renders text with GDI+ (<see cref="Graphics.DrawString" />), which is a
     ///     touch wider than the GDI measurement the base <see cref="System.Windows.Forms.Label" /> uses for AutoSize.
     ///     The result was labels clipping their last glyph everywhere (e.g. "Standby retry dela", "...(0 = never"). We
-    ///     measure with the same GDI+ path here and widen the preferred size so AutoSize text always fits in full.
+    ///     measure with the same GDI+ path here and grow the preferred size so AutoSize text always fits in full. The
+    ///     GDI+ line is also a little taller: small-font labels lost the bottom of g/y/ç ("saniye", "seçme") once the
+    ///     view's font scaling shrank their height, so the height is taken from the same measurement.
     /// </summary>
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -71,6 +73,10 @@ public class Label : System.Windows.Forms.Label
             var width = (int)Math.Ceiling(measured.Width) + Padding.Horizontal + 2;
             if (width > preferred.Width)
                 preferred.Width = width;
+
+            var height = (int)Math.Ceiling(measured.Height) + Padding.Vertical;
+            if (height > preferred.Height)
+                preferred.Height = height;
         }
         catch
         {

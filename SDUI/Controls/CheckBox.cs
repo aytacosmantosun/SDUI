@@ -22,6 +22,9 @@ namespace SDUI.Controls
 
         private int boxOffset;
 
+        // Product of the vertical factors this control was scaled by (see GetPreferredSize).
+        private float _heightScale = 1f;
+
         private RectangleF boxRectangle;
 
         private bool ripple;
@@ -129,23 +132,34 @@ namespace SDUI.Controls
             // OnPaint draws the label with GDI+ (DrawString), which is wider than the GDI TextRenderer the preferred
             // size used, so long checkbox texts clipped their last glyph. Measure with the same GDI+ path (plus a
             // small buffer) so the text always fits.
+            // The row height follows the view's vertical scale (font-scaled views shrink their rows to 3/4 at 100 %;
+            // a fixed 30 px let the next row cover this text's descenders), never below the text's own height.
             int textWidth;
+            int textHeight;
             try
             {
                 using var graphics = Graphics.FromHwnd(IntPtr.Zero);
-                textWidth = (int)Math.Ceiling(graphics.MeasureString(Text ?? string.Empty, Font).Width) + 2;
+                var measured = graphics.MeasureString(Text ?? string.Empty, Font);
+                textWidth = (int)Math.Ceiling(measured.Width) + 2;
+                textHeight = (int)Math.Ceiling(measured.Height) + 2;
             }
             catch
             {
-                textWidth = TextRenderer.MeasureText(Text, Font).Width + 6;
+                var measured = TextRenderer.MeasureText(Text, Font);
+                textWidth = measured.Width + 6;
+                textHeight = measured.Height + 4;
             }
 
             int w = boxOffset + CHECKBOX_SIZE + 2 + textWidth;
-            return Ripple ? new Size(w, 30) : new Size(w, 20);
+            var rowHeight = (int)Math.Round((Ripple ? 30 : 20) * _heightScale);
+            return new Size(w, Math.Max(rowHeight, Math.Max(textHeight, CHECKBOX_SIZE + 2)));
         }
 
         protected override void ScaleControl(SizeF factor, BoundsSpecified specified)
         {
+            if ((specified & BoundsSpecified.Height) != 0 && factor.Height > 0)
+                _heightScale *= factor.Height;
+
             base.ScaleControl(factor, specified);
 
             // FontManager fonts are fixed-pixel, so DPI down-scaling shrinks this control's width but not its text,

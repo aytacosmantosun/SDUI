@@ -230,7 +230,10 @@ public class Button : SKControl
 
     private void DrawText(SKCanvas canvas, string text, SKRect rect, SKPaint paint)
     {
-        canvas.DrawText(text, rect.MidX, rect.MidY, paint);
+        // DrawText takes the baseline: putting it on the middle line drew the text in the upper half, touching the
+        // top edge once a view's font scaling made the button shorter. Center the glyph box (ascent is negative).
+        var metrics = paint.FontMetrics;
+        canvas.DrawText(text, rect.MidX, rect.MidY - (metrics.Ascent + metrics.Descent) / 2f, paint);
     }
 
     private Size GetPreferredSize()
