@@ -42,6 +42,23 @@ public partial class InputDialog : UIWindowBase
     private InputType _inputType;
 
     /// <summary>
+    /// An empty text is a valid answer (e.g. "automatic"); otherwise OK warns with <see cref="EmptyValueText"/>.
+    /// </summary>
+    public bool AllowEmpty { get; set; }
+
+    /// <summary>
+    /// The empty-value warning; the application sets it in the interface language.
+    /// </summary>
+    public static string EmptyValueText { get; set; } = "The value can't be empty!";
+
+    /// <summary>
+    /// The button texts; the application sets them in the interface language.
+    /// </summary>
+    public static string OkText { get; set; } = "OK";
+
+    public static string CancelText { get; set; } = "Cancel";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="InputDialog"/> class.
     /// </summary>
     /// <param name="title">The title.</param>
@@ -56,6 +73,8 @@ public partial class InputDialog : UIWindowBase
     )
     {
         InitializeComponent();
+        btnOK.Text = OkText;
+        btnCancel.Text = CancelText;
         this.AcceptButton = this.btnOK;
         BackColor = ColorScheme.BackColor;
         ForeColor = ColorScheme.ForeColor;
@@ -135,9 +154,9 @@ public partial class InputDialog : UIWindowBase
                 break;
         }
 
-        if (_inputType == InputType.Textbox && string.IsNullOrWhiteSpace(value.ToString()))
+        if (_inputType == InputType.Textbox && !AllowEmpty && string.IsNullOrWhiteSpace(value?.ToString()))
         {
-            MessageBox.Show(this, "The value can't be empty!");
+            MessageBox.Show(this, EmptyValueText);
 
             DialogResult = DialogResult.Retry;
             return;
@@ -155,6 +174,10 @@ public partial class InputDialog : UIWindowBase
     {
         if (e.KeyCode == Keys.Enter)
         {
+            // An empty value is left to OK (the accept button), which warns; Enter used to accept it.
+            if (!AllowEmpty && string.IsNullOrWhiteSpace(txtValue.Text))
+                return;
+
             Value = txtValue.Text;
             DialogResult = DialogResult.OK;
         }

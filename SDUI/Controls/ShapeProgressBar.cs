@@ -165,7 +165,9 @@ public class ShapeProgressBar : Control
         )
             graphics.FillEllipse(brush, _weight / 2, _weight / 2, renderWidth, renderHeight);
 
-        var percent = (100 / _maximum) * _value;
+        // AtBot spec 09-00 §13.1 / 09-04 U4: the percentage is right for any maximum (integer 100 / max gave 0 for a
+        // bag of 109 slots).
+        var percent = _maximum > 0 ? (long)Math.Round(100.0 * _value / _maximum) : 0;
         var percentString = percent.ToString();
         var stringSize = graphics.MeasureString(percentString, Font);
 

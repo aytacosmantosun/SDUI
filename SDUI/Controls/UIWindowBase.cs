@@ -50,11 +50,17 @@ public class UIWindowBase : Form
         ResizeRedraw = true;
     }
 
+    /// <summary>
+    /// Esc closes this window. A small window (dialog, pop-up) keeps it; an application's main window turns it off:
+    /// one Esc while typing in a box used to close the main window and end an unattended run.
+    /// </summary>
+    [System.ComponentModel.DefaultValue(true)]
+    public bool CloseOnEscape { get; set; } = true;
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (msg.Msg == 256 | msg.Msg == 260)
-            if (keyData == Keys.Escape)
-                Close();
+        if ((msg.Msg == 256 || msg.Msg == 260) && keyData == Keys.Escape && CloseOnEscape)
+            Close();
 
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -284,10 +290,12 @@ public class UIWindowBase : Form
         base.WndProc(ref m);
     }
 
+    /// <summary>
+    /// Applies the dark / light system drawing to the control tree. Colours only: it used to switch every control
+    /// off and on again, which enabled controls that were disabled on purpose (locked tabs, a busy button).
+    /// </summary>
     public void ChangeControlsTheme(Control control)
     {
-        control.Enabled = false;
-
         var isDark = ColorScheme.BackColor.IsDark();
         if (control is ListView)
         {
@@ -295,7 +303,8 @@ public class UIWindowBase : Form
             {
                 SendMessage(control.Handle, 0x0127, (1 << 16) | (1 & 0xffff), 0);
 
-                AllowDarkModeForWindow(control.Handle, true);
+                // AtBot spec 09-04 U5 [A3-B8]: dark system drawing only in a dark scheme (it was on for every list).
+                AllowDarkModeForWindow(control.Handle, isDark);
             }
         }
 
@@ -315,7 +324,9 @@ public class UIWindowBase : Form
         {
             ChangeControlsTheme(subControl);
         }
-        control.Enabled = true;
+
+        // The off / on switch also forced a repaint; ask for it directly.
+        control.Invalidate();
     }
 
     protected override void OnHandleCreated(EventArgs e)

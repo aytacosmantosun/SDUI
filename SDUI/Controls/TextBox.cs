@@ -34,8 +34,9 @@ public class TextBox : Control
         get { return _passmask; }
         set
         {
-            _textBox.UseSystemPasswordChar = UseSystemPasswordChar;
+            // The field first: the inner box used to get the previous value.
             _passmask = value;
+            _textBox.UseSystemPasswordChar = value;
             Invalidate();
         }
     }
@@ -92,9 +93,34 @@ public class TextBox : Control
         get { return _multiline; }
         set
         {
+            // A1-B9: the setting now reaches the inner edit box (it stayed single-line: Enter pressed the dialog's
+            // default button and a pasted list kept one line). Multi-line: Enter is a new line, a vertical scroll
+            // bar, and the edit box takes the control's height.
             _multiline = value;
+            _textBox.Multiline = value;
+            _textBox.AcceptsReturn = value;
+            _textBox.WordWrap = value;
+            _textBox.ScrollBars = value ? ScrollBars.Vertical : ScrollBars.None;
+            FitInnerBox();
             Invalidate();
         }
+    }
+
+    /// <summary>A multi-line edit box fills the control; a single-line one sets the control's height (as before).</summary>
+    private void FitInnerBox()
+    {
+        if (!_multiline || _textBox == null)
+            return;
+
+        var size = new Size(System.Math.Max(1, Width - 10), System.Math.Max(1, Height - 6));
+        if (_textBox.Size != size)
+            _textBox.Size = size;
+    }
+
+    protected override void OnSizeChanged(System.EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        FitInnerBox();
     }
 
     public override string Text
@@ -175,11 +201,18 @@ public class TextBox : Control
         var determinedColor = ColorScheme.BackColor.Determine();
         var backColor = ColorScheme.BackColor.Brightness(-.1f);
 
-        Height = _textBox.Height + 5;
         var textbox = _textBox;
-        textbox.Width = Width - 10;
+        if (_multiline)
+            FitInnerBox();
+        else
+        {
+            Height = _textBox.Height + 5;
+            textbox.Width = Width - 10;
+        }
+
         textbox.TextAlign = TextAlignment;
-        textbox.UseSystemPasswordChar = UseSystemPasswordChar;
+        // PassFocusShow shows the text while the box has the focus (painting used to mask it again).
+        textbox.UseSystemPasswordChar = UseSystemPasswordChar && !(PassFocusShow && ContainsFocus);
         textbox.ForeColor = ColorScheme.ForeColor;
         textbox.BackColor = backColor;
 

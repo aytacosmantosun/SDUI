@@ -56,7 +56,9 @@ public static class ColorExtentions
     /// <param name="color">The color</param>
     public static bool IsDark(this Color color)
     {
-        return (384 - color.R - color.G - color.B) > 0;
+        // The same rule as the text colour (Determine): it used to be R+G+B < 384, which disagreed for saturated
+        // colours (100, 100, 255 = "light" theme with white text).
+        return (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255 <= 0.5;
     }
 
     /// <summary>

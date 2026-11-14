@@ -93,35 +93,9 @@ namespace SDUI.Controls.Subclasses
                 switch (m.Msg)
                 {
                     case WM_NOTIFY:
-
-                        var pnmhdr = (NMHDR)m.GetLParam(typeof(NMHDR));
-
-                        if (pnmhdr.code == NM_CUSTOMDRAW)
-                        {
-                            var nmcd = (NMCUSTOMDRAW)m.GetLParam(typeof(NMCUSTOMDRAW));
-
-                            switch (nmcd.dwDrawStage)
-                            {
-                                case (int)CDDS.CDDS_PREPAINT:
-                                    m.Result = new IntPtr((int)CDRF.CDRF_NOTIFYITEMDRAW);
-                                    break;
-                                case (int)CDDS.CDDS_ITEMPREPAINT:
-
-                                    var info = (SubclassInfo)
-                                        Marshal.PtrToStructure(
-                                            unchecked((IntPtr)(long)(ulong)dwRefData),
-                                            typeof(SubclassInfo)
-                                        );
-                                    SetTextColor(nmcd.hdc, info.headerTextColor);
-
-                                    m.Result = new IntPtr((int)CDRF.CDRF_DODEFAULT);
-
-                                    break;
-                                default:
-                                    m.Result = new IntPtr((int)CDRF.CDRF_NOTIFYPOSTPAINT);
-                                    break;
-                            }
-                        }
+                        // AtBot spec 09-04 U5 [A3-B8]: the header's custom draw is done by ListView.DrawHeader. This
+                        // window was registered without its colour block (dwRefData 0), so reading it threw and the
+                        // item notification never reached the list.
                         break;
                     case WM_THEMECHANGED:
 

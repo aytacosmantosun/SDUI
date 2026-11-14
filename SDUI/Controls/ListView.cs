@@ -166,8 +166,118 @@ public class ListView : System.Windows.Forms.ListView
         return -1;
     }
 
+    /// <summary>
+    /// AtBot spec 09-04 U5 [A3-B8]: the column header is drawn here with the scheme's colours. The system drawing
+    /// gave dark text on a black band in every theme (dark mode allowed for every list, and the header text colour
+    /// was never set).
+    /// </summary>
+    private bool DrawHeader(ref Message m)
+    {
+        var hdr = (NMHDR)m.GetLParam(typeof(NMHDR));
+        if (hdr.code != NM_CUSTOMDRAW || View != View.Details)
+            return false;
+
+        var header = SendMessage(Handle, LVM_GETHEADER, 0, 0);
+        if (header == IntPtr.Zero || hdr.hwndFrom != header)
+            return false;
+
+        var nmcd = (NMCUSTOMDRAW)m.GetLParam(typeof(NMCUSTOMDRAW));
+        var back = Mix(ColorScheme.BackColor, ColorScheme.ForeColor, 0.06f);
+        var line = Mix(ColorScheme.BackColor, ColorScheme.ForeColor, 0.2f);
+
+        switch ((CDDS)nmcd.dwDrawStage)
+        {
+            case CDDS.CDDS_PREPAINT:
+                m.Result = new IntPtr((int)(CDRF.CDRF_NOTIFYITEMDRAW | CDRF.CDRF_NOTIFYPOSTPAINT));
+                return true;
+
+            case CDDS.CDDS_ITEMPREPAINT:
+            {
+                var index = (int)nmcd.dwItemSpec;
+                var rect = new Rectangle(nmcd.rc.Left, nmcd.rc.Top, nmcd.rc.Width, nmcd.rc.Height);
+                using (var graphics = Graphics.FromHdc(nmcd.hdc))
+                using (var brush = new SolidBrush(back))
+                using (var pen = new Pen(line))
+                {
+                    graphics.FillRectangle(brush, rect);
+                    graphics.DrawLine(pen, rect.Right - 1, rect.Top + 4, rect.Right - 1, rect.Bottom - 5);
+                    graphics.DrawLine(pen, rect.Left, rect.Bottom - 1, rect.Right, rect.Bottom - 1);
+
+                    if (index >= 0 && index < Columns.Count)
+                    {
+                        var column = Columns[index];
+                        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+                            | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
+                        flags |= column.TextAlign switch
+                        {
+                            HorizontalAlignment.Right => TextFormatFlags.Right,
+                            HorizontalAlignment.Center => TextFormatFlags.HorizontalCenter,
+                            _ => TextFormatFlags.Left,
+                        };
+
+                        var textRect = Rectangle.Inflate(rect, -6, 0);
+                        if (LvwColumnSorter.SortColumn == index && LvwColumnSorter.Order != SortOrder.None)
+                        {
+                            var arrow = LvwColumnSorter.Order == SortOrder.Ascending ? "▲" : "▼";
+                            var arrowRect = new Rectangle(rect.Right - 16, rect.Top, 12, rect.Height);
+                            TextRenderer.DrawText(graphics, arrow, Font, arrowRect, line, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+                            textRect.Width -= 12;
+                        }
+
+                        TextRenderer.DrawText(graphics, column.Text, Font, textRect, ColorScheme.ForeColor, flags);
+                    }
+                }
+
+                m.Result = new IntPtr((int)CDRF.CDRF_SKIPDEFAULT);
+                return true;
+            }
+
+            case CDDS.CDDS_POSTPAINT:
+            {
+                // The empty band right of the last column.
+                var right = 0;
+                foreach (ColumnHeader column in Columns)
+                    right += column.Width;
+
+                if (right < nmcd.rc.Right)
+                {
+                    using var graphics = Graphics.FromHdc(nmcd.hdc);
+                    using var brush = new SolidBrush(back);
+                    using var pen = new Pen(line);
+                    graphics.FillRectangle(brush, right, nmcd.rc.Top, nmcd.rc.Right - right, nmcd.rc.Height);
+                    graphics.DrawLine(pen, right, nmcd.rc.Bottom - 1, nmcd.rc.Right, nmcd.rc.Bottom - 1);
+                }
+
+                m.Result = IntPtr.Zero;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Color Mix(Color background, Color front, float amount) =>
+        Color.FromArgb(
+            (int)(background.R + (front.R - background.R) * amount),
+            (int)(background.G + (front.G - background.G) * amount),
+            (int)(background.B + (front.B - background.B) * amount)
+        );
+
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == WM_NOTIFY)
+        {
+            try
+            {
+                if (DrawHeader(ref m))
+                    return;
+            }
+            catch (Exception)
+            {
+                // A drawing error must never take the list down; the system draws the header then.
+            }
+        }
+
         if (m.Msg == WM_REFLECT + WM_NOFITY)
         {
             var pnmhdr = (NMHDR)m.GetLParam(typeof(NMHDR));
