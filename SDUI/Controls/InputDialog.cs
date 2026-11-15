@@ -156,13 +156,34 @@ public partial class InputDialog : UIWindowBase
 
         if (_inputType == InputType.Textbox && !AllowEmpty && string.IsNullOrWhiteSpace(value?.ToString()))
         {
-            MessageBox.Show(this, EmptyValueText);
+            // UTa-new-8 (AtBot): the warning is shown in the window itself, in place of the message, instead of a
+            // blocking box; the window stays open and the message comes back when the user types.
+            ShowEmptyWarning();
 
             DialogResult = DialogResult.Retry;
             return;
         }
 
         Value = value;
+    }
+
+    /// <summary>The message the caller gave, shown again once the empty-value warning is gone.</summary>
+    private string _message;
+
+    private void ShowEmptyWarning()
+    {
+        if (_message == null)
+        {
+            _message = lblMessage.Text;
+            txtValue.TextChanged += (_, _) =>
+            {
+                if (_message != null && lblMessage.Text != _message)
+                    lblMessage.Text = _message;
+            };
+        }
+
+        lblMessage.Text = EmptyValueText;
+        txtValue.Focus();
     }
 
     /// <summary>

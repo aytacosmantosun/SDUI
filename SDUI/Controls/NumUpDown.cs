@@ -60,6 +60,8 @@ namespace SDUI.Controls
             get { return _value; }
             set
             {
+                // AtBot UTa-new-16: a box without decimal places shows a whole number (an old "1.5" setting shows 2).
+                value = Math.Round(value, _decimalPlaces, MidpointRounding.AwayFromZero);
                 if (value > _max || value < _min)
                 {
                     var shown = value > _max ? _max : _min;
@@ -121,6 +123,20 @@ namespace SDUI.Controls
 
                 Invalidate();
             }
+        }
+
+        private int _decimalPlaces;
+
+        /// <summary>
+        ///     AtBot UTa-new-16: 0 (the default; every box of the bot) takes whole numbers only: "." and the decimal
+        ///     separator cannot be typed and a pasted "1.5" is unreadable text (undone on Enter / leaving), so an integer
+        ///     setting is never saved as "1.5". Above 0 a fraction may be typed; it is rounded to this many places.
+        /// </summary>
+        [System.ComponentModel.DefaultValue(0)]
+        public int DecimalPlaces
+        {
+            get => _decimalPlaces;
+            set => _decimalPlaces = Math.Clamp(value, 0, 28);
         }
 
         public override Color BackColor
@@ -413,8 +429,12 @@ namespace SDUI.Controls
             if (char.IsControl(c) || char.IsDigit(c))
                 return;
 
+            if (c == '-' && _min < 0)
+                return;
+
+            // UTa-new-16: a decimal point only in a box with decimal places (it used to be taken in every box).
             var format = CultureInfo.CurrentCulture.NumberFormat;
-            if ((c == '-' && _min < 0) || format.NumberDecimalSeparator.IndexOf(c) >= 0 || c == '.')
+            if (_decimalPlaces > 0 && (format.NumberDecimalSeparator.IndexOf(c) >= 0 || c == '.'))
                 return;
 
             e.Handled = true;
@@ -436,8 +456,11 @@ namespace SDUI.Controls
             }
         }
 
-        /// <summary>64-bit safe (gold boxes reach 999 999 999 999): decimal in the interface culture, then invariant.</summary>
-        private static bool TryParse(string text, out decimal value)
+        /// <summary>
+        ///     64-bit safe (gold boxes reach 999 999 999 999): decimal in the interface culture, then invariant.
+        ///     UTa-new-16: with <see cref="DecimalPlaces" /> 0 a fraction ("1.5") does not read as a number.
+        /// </summary>
+        private bool TryParse(string text, out decimal value)
         {
             text = (text ?? string.Empty).Trim();
             if (text.Length == 0)
@@ -446,8 +469,15 @@ namespace SDUI.Controls
                 return false;
             }
 
-            return decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out value)
-                || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value);
+            var style = _decimalPlaces > 0 ? NumberStyles.Number : NumberStyles.Integer | NumberStyles.AllowThousands;
+            if (!decimal.TryParse(text, style, CultureInfo.CurrentCulture, out value)
+                && !decimal.TryParse(text, style, CultureInfo.InvariantCulture, out value))
+                return false;
+
+            if (_decimalPlaces > 0)
+                value = Math.Round(value, _decimalPlaces);
+
+            return true;
         }
 
         protected override void Dispose(bool disposing)
