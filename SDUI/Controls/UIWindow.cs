@@ -1067,6 +1067,24 @@ public class UIWindow : UIWindowBase
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        // Children with a transparent background (every tab page, labels) paint this window through here too. While
+        // the windows are taken down (bot exit) a frame can meet a window that is already gone: that frame is skipped.
+        // An exception out of here used to end in the "unexpected error" box and leaves a child painting a red cross.
+        if (IsDisposed || Disposing)
+            return;
+
+        try
+        {
+            PaintWindow(e);
+        }
+        catch (Exception ex) when (ex is Win32Exception or ObjectDisposedException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UIWindow] Frame skipped: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void PaintWindow(PaintEventArgs e)
+    {
         var graphics = e.Graphics;
         graphics.SmoothingMode = SmoothingMode.HighSpeed;
         graphics.CompositingQuality = CompositingQuality.HighSpeed;
@@ -1422,7 +1440,7 @@ public class UIWindow : UIWindowBase
                         FormatFlags = StringFormatFlags.FitBlackBox | StringFormatFlags.NoWrap,
                     };
 
-                    graphics.DrawString(page.Text, Font, foreColor.Brush(), rect, format);
+                    graphics.DrawString(TabTitle(page), Font, foreColor.Brush(), rect, format);
                 }
                 else
                 {
@@ -1438,7 +1456,7 @@ public class UIWindow : UIWindowBase
                         FormatFlags = StringFormatFlags.NoWrap,
                     };
 
-                    graphics.DrawString(page.Text, page.Font, textBrush, rect, format);
+                    graphics.DrawString(TabTitle(page), page.Font, textBrush, rect, format);
                 }
             }
 
@@ -1656,9 +1674,15 @@ public class UIWindow : UIWindowBase
         get => _windowPageControl;
         set
         {
+            foreach (var tracked in new List<Control>(_tabTitles.Keys))
+                UntrackTabPage(tracked);
+
             _windowPageControl = value;
             if (_windowPageControl == null)
                 return;
+
+            foreach (Control page in _windowPageControl.Controls)
+                TrackTabPage(page);
 
             previousSelectedPageIndex = _windowPageControl.SelectedIndex;
 
@@ -1668,14 +1692,85 @@ public class UIWindow : UIWindowBase
                 pageAreaAnimationManager.SetProgress(0);
                 pageAreaAnimationManager.StartNewAnimation(AnimationDirection.In);
             };
-            _windowPageControl.ControlAdded += delegate
+            // A page control set before keeps these handlers; only the current one's pages are followed.
+            _windowPageControl.ControlAdded += (sender, e) =>
             {
+                if (ReferenceEquals(sender, _windowPageControl))
+                    TrackTabPage(e.Control);
                 Invalidate();
             };
-            _windowPageControl.ControlRemoved += delegate
+            _windowPageControl.ControlRemoved += (sender, e) =>
             {
+                if (ReferenceEquals(sender, _windowPageControl))
+                    UntrackTabPage(e.Control);
                 Invalidate();
             };
+        }
+    }
+
+    /// <summary>
+    ///     Each tab page's title, kept from the page's TextChanged. Painting reads it from here: a page's Text asks the
+    ///     page's own window for its text (GetWindowText reads the page's Handle twice), and when that window went away
+    ///     in between - the windows being taken down on exit - the read created a new window for the page with no parent
+    ///     window and threw Win32Exception 1406 "Error creating window handle" out of OnPaint (2026-11-18).
+    /// </summary>
+    private readonly Dictionary<Control, string> _tabTitles = new();
+
+    private void TrackTabPage(Control page)
+    {
+        if (page == null || _tabTitles.ContainsKey(page))
+            return;
+
+        _tabTitles[page] = ReadTabTitle(page);
+        page.TextChanged += TabPage_TextChanged;
+    }
+
+    private void UntrackTabPage(Control page)
+    {
+        if (page == null || !_tabTitles.Remove(page))
+            return;
+
+        page.TextChanged -= TabPage_TextChanged;
+    }
+
+    private void TabPage_TextChanged(object sender, EventArgs e)
+    {
+        if (sender is not Control page || !_tabTitles.ContainsKey(page))
+            return;
+
+        _tabTitles[page] = ReadTabTitle(page);
+        Invalidate();
+    }
+
+    /// <summary>The title painted for a tab page; never asks a page's window while painting.</summary>
+    private string TabTitle(Control page)
+    {
+        if (page == null)
+            return string.Empty;
+
+        if (_tabTitles.TryGetValue(page, out var title))
+            return title;
+
+        // A page the window does not follow yet (normally every page is followed from ControlAdded).
+        if (page.IsDisposed || page.Disposing)
+            return string.Empty;
+
+        TrackTabPage(page);
+        return _tabTitles.TryGetValue(page, out title) ? title : string.Empty;
+    }
+
+    private static string ReadTabTitle(Control page)
+    {
+        if (page.IsDisposed || page.Disposing)
+            return string.Empty;
+
+        try
+        {
+            return page.Text ?? string.Empty;
+        }
+        catch (Exception ex) when (ex is Win32Exception or ObjectDisposedException)
+        {
+            return string.Empty;
         }
     }
 
@@ -1718,7 +1813,7 @@ public class UIWindow : UIWindowBase
             for (int i = 0; i < count; i++)
             {
                 var page = _windowPageControl.Controls[i];
-                var width = measure.MeasureString(page.Text ?? string.Empty, page.Font).Width + 2 * TAB_HEADER_PADDING * DPI;
+                var width = measure.MeasureString(TabTitle(page), page.Font).Width + 2 * TAB_HEADER_PADDING * DPI;
                 if (_drawTabIcons)
                     width += measure.MeasureString("", Font).Width + TAB_HEADER_PADDING * DPI + 24 * DPI;
 
